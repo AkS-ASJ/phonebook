@@ -39,14 +39,9 @@ app.get('/api/persons/:id', (request, response) => {
 })
 
 app.put('/api/persons/:id', (request, response, next) => {
-    const body = request.body
+    const {name, number} = request.body
 
-    const person = {
-        name: body.name,
-        number: body.number,
-    }
-
-    Person.findByIdAndUpdate(request.params.id, person, { new: true })
+    Person.findByIdAndUpdate(request.params.id, {name, number}, { new: true, runValidators: true, context: 'query' })
         .then(updatedNum => {
             response.json(updatedNum)
         })
@@ -62,15 +57,8 @@ app.delete('/api/persons/:id', (request, response, next) => {
 })
 
 morgan.token('body', (req) => JSON.stringify(req.body))
-app.post('/api/persons', morgan(':method :url :status :res[content-length] - :response-time ms :body'), (request, response) => {
+app.post('/api/persons', morgan(':method :url :status :res[content-length] - :response-time ms :body'), (request, response, next) => {
     const body = request.body
-    const check = persons.find(element => JSON.stringify(element.name) === JSON.stringify(body.name))
-
-    if (!body.name || !body.number || check) {
-        return response.status(400).json({
-            error: 'name must be unique'
-        })
-    }
 
     const person = new Person ({
         name: body.name,
@@ -79,15 +67,16 @@ app.post('/api/persons', morgan(':method :url :status :res[content-length] - :re
 
     person.save().then(savedPerson => {
         response.json(savedPerson)
-    })
+    }).catch(error => next(error))
 
 })
 
 const errorHandler = (error, request, response, next) => {
     console.error(error.message)
-
     if (error.name === 'CastError') {
         return response.status(400).send({ error: 'malformatted id' })
+    } else if (error.name === 'ValidationError') {
+        return response.status(400).json({error: error.message})
     }
 
     next(error)
